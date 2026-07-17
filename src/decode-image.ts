@@ -181,13 +181,23 @@ export function decodeParsedImage(
   encoding: Encoding,
   input: Uint8ClampedArray,
 ): DemTile {
-  const decoder: (r: number, g: number, b: number) => number =
+  const decoder: (r: number, g: number, b: number, a: number) => number =
     encoding === "mapbox"
       ? (r, g, b) => -10000 + (r * 256 * 256 + g * 256 + b) * 0.1
-      : (r, g, b) => r * 256 + g + b / 256 - 32768;
+      : encoding === "numpng"
+        ? // 数値PNG（データPNG 正式エンコード, 符号付き24bit整数, factor 0.01）
+          (r, g, b, a) => {
+            // アルファ0、または無効色(128,0,0)は無効値
+            if (a === 0) return NaN;
+            if (r === 128 && g === 0 && b === 0) return NaN;
+            const x = r * 256 * 256 + g * 256 + b;
+            if (x === 2 ** 23) return NaN;
+            return x > 2 ** 23 ? (x - 2 ** 24) * 0.01 : x * 0.01;
+          }
+        : (r, g, b) => r * 256 + g + b / 256 - 32768;
   const data = new Float32Array(width * height);
   for (let i = 0; i < input.length; i += 4) {
-    data[i / 4] = decoder(input[i], input[i + 1], input[i + 2]);
+    data[i / 4] = decoder(input[i], input[i + 1], input[i + 2], input[i + 3]);
   }
   return { width, height, data };
 }

@@ -137,3 +137,30 @@ test("subsample and average centers alignment between tiles", () => {
   expect(subsampled?.get(2, 2)).toBe(notSubsampled?.get(1, 1));
   expect(subsampled?.get(-2, -2)).toBe(notSubsampled?.get(-1, -1));
 });
+
+test("gridFromNorthwestPixels (左上法): ピクセル値を左上格子点として直接用いる", () => {
+  const tile = HeightTile.fromRawDem({
+    width: 2,
+    height: 2,
+    data: Float32Array.from([0, 1, 2, 3]),
+  });
+  const grid = tile.gridFromNorthwestPixels();
+  expect(grid.width).toBe(3);
+  expect(grid.height).toBe(3);
+  // 平均化せず各ピクセル値をそのまま格子点に用いる
+  expect(grid.get(0, 0)).toBe(0);
+  expect(grid.get(1, 0)).toBe(1);
+  expect(grid.get(1, 1)).toBe(3);
+});
+
+test("averagePixelCentersToGrid (中央法): 中央格子点は周囲4ピクセルの平均", () => {
+  const tile = HeightTile.fromRawDem({
+    width: 2,
+    height: 2,
+    data: Float32Array.from([0, 1, 2, 3]),
+  });
+  const grid = tile.averagePixelCentersToGrid();
+  expect(grid.width).toBe(3);
+  // 格子点(1,1)は4ピクセル(0,1,2,3)の平均 = 1.5
+  expect(grid.get(1, 1)).toBeCloseTo(1.5, 6);
+});

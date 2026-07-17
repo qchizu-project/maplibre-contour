@@ -133,6 +133,14 @@ export class HeightTile {
       return count === 0 ? NaN : sum / count;
     });
 
+  /**
+   * 左上法（northwest anchor）用の格子を返す。
+   * 各ピクセル値をそのセルの左上（北西端）の格子点として直接用い、平均化しない。
+   * 中央法（averagePixelCentersToGrid）に対して半ピクセルずれた等高線となる。
+   */
+  gridFromNorthwestPixels = (): HeightTile =>
+    new HeightTile(this.width + 1, this.height + 1, (x, y) => this.get(x, y));
+
   /** Returns a new tile with elevation values scaled by `multiplier`. */
   scaleElevation = (multiplier: number): HeightTile =>
     multiplier === 1

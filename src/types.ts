@@ -3,7 +3,14 @@ import type { Timer } from "./performance";
 import type WorkerDispatch from "./worker-dispatch";
 
 /** Scheme used to map pixel rgb values elevations. */
-export type Encoding = "terrarium" | "mapbox";
+export type Encoding = "terrarium" | "mapbox" | "numpng";
+
+/**
+ * ピクセル値がセル内のどの点を代表するか（tilejson-datapng-extension の support.anchor 相当）。
+ * - "center": 中央法（ピクセル中心。既定）
+ * - "northwest": 左上法（ピクセルの左上＝北西端）
+ */
+export type PixelAnchor = "center" | "northwest";
 export interface IsTransferrable {
   transferrables: Transferable[];
 }
@@ -157,6 +164,8 @@ export type DemManagerRequiredInitializationParameters = {
   encoding: Encoding;
   maxzoom: number;
   timeoutMs: number;
+  /** ピクセル値のアンカー（中央法/左上法）。既定は "center"。worker へも転送される。 */
+  pixelAnchor?: PixelAnchor;
 };
 
 export type DemManagerInitizlizationParameters =

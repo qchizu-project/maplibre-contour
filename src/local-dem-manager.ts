@@ -13,6 +13,7 @@ import type {
   FetchResponse,
   GetTileFunction,
   IndividualContourTileOptions,
+  PixelAnchor,
 } from "./types";
 import encodeVectorTile, { GeomType } from "./vtpbf";
 import { Timer } from "./performance";
@@ -46,6 +47,7 @@ export class LocalDemManager implements DemManager {
   encoding: Encoding;
   maxzoom: number;
   timeoutMs: number;
+  pixelAnchor: PixelAnchor;
   loaded = Promise.resolve();
   decodeImage: DecodeImageFunction;
   getTile: GetTileFunction;
@@ -58,6 +60,8 @@ export class LocalDemManager implements DemManager {
     this.demUrlPattern = options.demUrlPattern;
     this.encoding = options.encoding;
     this.maxzoom = options.maxzoom;
+    // ピクセルアンカー（中央法/左上法）。既定は中央法。
+    this.pixelAnchor = options.pixelAnchor || "center";
     this.decodeImage = options.decodeImage || defaultDecodeImage;
     this.getTile = options.getTile || defaultGetTile;
   }
@@ -214,8 +218,14 @@ export class LocalDemManager implements DemManager {
           }
         }
 
-        virtualTile = virtualTile
-          .averagePixelCentersToGrid()
+        // ピクセルアンカーに応じて格子を構成する:
+        //   center(中央法)   → 周囲ピクセル中心を平均して格子点を得る
+        //   northwest(左上法) → 各ピクセル値を左上格子点として直接用いる（平均化しない）
+        virtualTile = (
+          this.pixelAnchor === "northwest"
+            ? virtualTile.gridFromNorthwestPixels()
+            : virtualTile.averagePixelCentersToGrid()
+        )
           .scaleElevation(multiplier)
           .materialize(1);
 

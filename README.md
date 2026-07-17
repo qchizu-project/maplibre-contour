@@ -1,5 +1,12 @@
 # maplibre-contour
 
+> **Fork additions (qchizu-project)** — このリポジトリは [onthegomap/maplibre-contour](https://github.com/onthegomap/maplibre-contour) のフォークで、次を追加している:
+>
+> - **`encoding: "numpng"`** — 数値PNG（データPNG 正式エンコード, 符号付き24bit整数, factor 0.01, 無効色 `[128,0,0]`）のデコードに対応。
+> - **`pixelAnchor: "center" | "northwest"`** — ピクセル値がセルの中央（中央法）か左上（左上法）を代表するかを指定。既定は `"center"`。等高線の格子生成方法に反映される。
+>
+> 上流の最新を随時取り込み、これらの改変を再適用して維持する。
+
 maplibre-contour is a plugin to render contour lines in [MapLibre GL JS](https://github.com/maplibre/maplibre-gl-js) from `raster-dem` sources that powers the terrain mode for [onthegomap.com](https://onthegomap.com).
 
 ![Topographic map of Mount Washington](demo.png)
@@ -23,7 +30,8 @@ Then to use, first create a `DemSource` and register it with maplibre:
 ```js
 var demSource = new mlcontour.DemSource({
   url: "https://url/of/dem/source/{z}/{x}/{y}.png",
-  encoding: "terrarium", // "mapbox" or "terrarium" default="terrarium"
+  encoding: "terrarium", // "mapbox", "terrarium", or "numpng" (Numerical PNG / データPNG) default="terrarium"
+  pixelAnchor: "center", // "center" (中央法) or "northwest" (左上法) default="center"
   maxzoom: 13,
   worker: true, // offload isoline computation to a web worker to reduce jank
   cacheSize: 100, // number of most-recent tiles to cache

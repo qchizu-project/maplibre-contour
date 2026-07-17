@@ -9,7 +9,9 @@ import RemoteDemManager from "./remote-dem-manager";
 import type {
   DemManager,
   DemTile,
+  Encoding,
   GlobalContourTileOptions,
+  PixelAnchor,
   Timing,
 } from "./types";
 import type WorkerDispatch from "./worker-dispatch";
@@ -108,6 +110,7 @@ export class DemSource {
     cacheSize = 100,
     id = "dem",
     encoding = "terrarium",
+    pixelAnchor = "center",
     maxzoom = 12,
     worker = true,
     timeoutMs = 10_000,
@@ -119,7 +122,10 @@ export class DemSource {
     cacheSize?: number;
     /** Prefix for the maplibre protocol */
     id?: string;
-    encoding?: "terrarium" | "mapbox";
+    /** Scheme used to map pixel rgb values to elevations ("terrarium" | "mapbox" | "numpng") */
+    encoding?: Encoding;
+    /** ピクセル値のアンカー（"center"=中央法 / "northwest"=左上法）。既定は "center"。 */
+    pixelAnchor?: PixelAnchor;
     /** Maximum zoom of tiles contained in the source */
     maxzoom: number;
     timeoutMs?: number;
@@ -142,6 +148,7 @@ export class DemSource {
       demUrlPattern: url,
       cacheSize,
       encoding,
+      pixelAnchor,
       maxzoom,
       timeoutMs,
       actor,

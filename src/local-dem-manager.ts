@@ -37,6 +37,25 @@ const defaultGetTile: GetTileFunction = async (
 };
 
 /**
+ * ★追加部分: DEMタイルの取得失敗を「タイルが存在しない(nodata)」として
+ * 扱ってよいかを判定する。
+ *
+ * カバレッジ外のDEMタイルは 404 になるが、404 応答に CORS ヘッダを付けない
+ * タイルサーバでは fetch 自体が TypeError で失敗するため、ステータスコードでは
+ * 判別できない。そこで中断・タイムアウトのような一時的な失敗だけを除外し、
+ * それ以外は欠損タイルとみなす。一時的な失敗まで nodata として扱うと、
+ * 等高線の欠けたタイルがキャッシュに焼き付いてしまう。
+ */
+function isMissingTileError(
+  error: unknown,
+  abortController: AbortController,
+): boolean {
+  if (isAborted(abortController)) return false;
+  const message = error instanceof Error ? error.message : "";
+  return message !== "timed out" && message !== "aborted";
+}
+
+/**
  * Caches, decodes, and processes raster tiles in the current thread.
  */
 export class LocalDemManager implements DemManager {
@@ -186,7 +205,10 @@ export class LocalDemManager implements DemManager {
       key,
       async (_, childAbortController) => {
         const max = 1 << z;
-        const neighborPromises: (Promise<HeightTile> | undefined)[] = [];
+        const neighborPromises: (
+          | Promise<HeightTile | undefined>
+          | undefined
+        )[] = [];
         for (let iy = y - 1; iy <= y + 1; iy++) {
           for (let ix = x - 1; ix <= x + 1; ix++) {
             neighborPromises.push(
@@ -199,7 +221,18 @@ export class LocalDemManager implements DemManager {
                     options,
                     childAbortController,
                     timer,
-                  ),
+                  ).catch((error) => {
+                    // ★追加部分: 取得できないDEMタイルは nodata として扱う。
+                    // 近傍1枚の欠損で等高線タイル全体を失敗させると、MapLibre が
+                    // 代わりに親タイルを引き伸ばして描画するため、そのズームとは
+                    // 異なる間隔の等高線が表示されてしまう。
+                    // 中心タイル(index 4)が欠損した場合は combineNeighbors が
+                    // undefined を返し、空の等高線タイルになる。
+                    if (isMissingTileError(error, childAbortController)) {
+                      return undefined;
+                    }
+                    throw error;
+                  }),
             );
           }
         }

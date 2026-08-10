@@ -88,11 +88,48 @@ test("中心タイルが取得できなければ空のタイルを返す", async
   expect(arrayBuffer.byteLength).toBe(0);
 });
 
-test("タイムアウト・中断は欠損として扱わず失敗させる", async () => {
+test("CORSヘッダの無い404応答（fetch自体の失敗）を欠損として扱う", async () => {
+  // 実際のタイルサーバでは 404 応答に CORS ヘッダが無く、
+  // ステータスコードを読む前に fetch が TypeError で失敗する
+  await expect(
+    countFeatures(
+      createManager(["10/19/29"], new TypeError("Failed to fetch")),
+    ),
+  ).resolves.toBe(1);
+});
+
+test("4xxは欠損として扱い、5xxは失敗させる", async () => {
+  await expect(
+    countFeatures(
+      createManager(
+        ["10/19/29"],
+        new Error("Bad response: 404 for https://example/10/19/29.png"),
+      ),
+    ),
+  ).resolves.toBe(1);
+  await expect(
+    countFeatures(
+      createManager(
+        ["10/19/29"],
+        new Error("Bad response: 503 for https://example/10/19/29.png"),
+      ),
+    ),
+  ).rejects.toThrow("Bad response: 503");
+});
+
+test("タイムアウト・中断・デコード失敗は欠損として扱わず失敗させる", async () => {
   await expect(
     countFeatures(createManager(["10/19/29"], new Error("timed out"))),
   ).rejects.toThrow("timed out");
   await expect(
     countFeatures(createManager(["10/20/30"], new Error("aborted"))),
   ).rejects.toThrow("aborted");
+  await expect(
+    countFeatures(createManager(["10/20/30"], new Error("canceled"))),
+  ).rejects.toThrow("canceled");
+  await expect(
+    countFeatures(
+      createManager(["10/20/30"], new Error("Could not load image.")),
+    ),
+  ).rejects.toThrow("Could not load image.");
 });

@@ -40,19 +40,28 @@ const defaultGetTile: GetTileFunction = async (
  * ★追加部分: DEMタイルの取得失敗を「タイルが存在しない(nodata)」として
  * 扱ってよいかを判定する。
  *
- * カバレッジ外のDEMタイルは 404 になるが、404 応答に CORS ヘッダを付けない
- * タイルサーバでは fetch 自体が TypeError で失敗するため、ステータスコードでは
- * 判別できない。そこで中断・タイムアウトのような一時的な失敗だけを除外し、
- * それ以外は欠損タイルとみなす。一時的な失敗まで nodata として扱うと、
- * 等高線の欠けたタイルがキャッシュに焼き付いてしまう。
+ * 「欠損と判断できる失敗」だけを true にし、それ以外（5xx・デコード失敗・
+ * タイムアウト・中断など、再試行すれば成功しうるもの）は false にして
+ * 呼び出し元へ伝播させる。一時的な失敗を nodata として扱うと、等高線の欠けた
+ * タイルが contourCache に焼き付き、再取得もされなくなるため。
+ *
+ * 欠損と判断する失敗:
+ * - `TypeError`: fetch 自体の失敗。カバレッジ外タイルの 404 応答に CORS ヘッダを
+ *   付けないタイルサーバでは、ステータスコードを読む前にここで失敗する。
+ * - 4xx: {@link defaultGetTile} が投げる `Bad response: <status> for <url>`。
+ *
+ * `getTile` を差し替える場合、欠損タイルは上記のいずれかの形で失敗させる必要がある。
  */
 function isMissingTileError(
   error: unknown,
   abortController: AbortController,
 ): boolean {
   if (isAborted(abortController)) return false;
+  // fetch 自体の失敗（ネットワークエラー、CORS ヘッダの無い 404 応答など）
+  if (error instanceof TypeError) return true;
   const message = error instanceof Error ? error.message : "";
-  return message !== "timed out" && message !== "aborted";
+  const status = /^Bad response: (\d+)/.exec(message);
+  return status ? Number(status[1]) < 500 : false;
 }
 
 /**

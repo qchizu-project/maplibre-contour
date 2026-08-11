@@ -37,6 +37,34 @@ const defaultGetTile: GetTileFunction = async (
 };
 
 /**
+ * ★追加部分: DEMタイルの取得失敗を「タイルが存在しない(nodata)」として
+ * 扱ってよいかを判定する。
+ *
+ * 「欠損と判断できる失敗」だけを true にし、それ以外（5xx・デコード失敗・
+ * タイムアウト・中断など、再試行すれば成功しうるもの）は false にして
+ * 呼び出し元へ伝播させる。一時的な失敗を nodata として扱うと、等高線の欠けた
+ * タイルが contourCache に焼き付き、再取得もされなくなるため。
+ *
+ * 欠損と判断する失敗:
+ * - `TypeError`: fetch 自体の失敗。カバレッジ外タイルの 404 応答に CORS ヘッダを
+ *   付けないタイルサーバでは、ステータスコードを読む前にここで失敗する。
+ * - 4xx: {@link defaultGetTile} が投げる `Bad response: <status> for <url>`。
+ *
+ * `getTile` を差し替える場合、欠損タイルは上記のいずれかの形で失敗させる必要がある。
+ */
+function isMissingTileError(
+  error: unknown,
+  abortController: AbortController,
+): boolean {
+  if (isAborted(abortController)) return false;
+  // fetch 自体の失敗（ネットワークエラー、CORS ヘッダの無い 404 応答など）
+  if (error instanceof TypeError) return true;
+  const message = error instanceof Error ? error.message : "";
+  const status = /^Bad response: (\d+)/.exec(message);
+  return status ? Number(status[1]) < 500 : false;
+}
+
+/**
  * Caches, decodes, and processes raster tiles in the current thread.
  */
 export class LocalDemManager implements DemManager {
@@ -186,7 +214,10 @@ export class LocalDemManager implements DemManager {
       key,
       async (_, childAbortController) => {
         const max = 1 << z;
-        const neighborPromises: (Promise<HeightTile> | undefined)[] = [];
+        const neighborPromises: (
+          | Promise<HeightTile | undefined>
+          | undefined
+        )[] = [];
         for (let iy = y - 1; iy <= y + 1; iy++) {
           for (let ix = x - 1; ix <= x + 1; ix++) {
             neighborPromises.push(
@@ -199,7 +230,18 @@ export class LocalDemManager implements DemManager {
                     options,
                     childAbortController,
                     timer,
-                  ),
+                  ).catch((error) => {
+                    // ★追加部分: 取得できないDEMタイルは nodata として扱う。
+                    // 近傍1枚の欠損で等高線タイル全体を失敗させると、MapLibre が
+                    // 代わりに親タイルを引き伸ばして描画するため、そのズームとは
+                    // 異なる間隔の等高線が表示されてしまう。
+                    // 中心タイル(index 4)が欠損した場合は combineNeighbors が
+                    // undefined を返し、空の等高線タイルになる。
+                    if (isMissingTileError(error, childAbortController)) {
+                      return undefined;
+                    }
+                    throw error;
+                  }),
             );
           }
         }

@@ -2,7 +2,7 @@ import AsyncCache from "./cache";
 import defaultDecodeImage from "./decode-image";
 import { HeightTile } from "./height-tile";
 import generateIsolines from "./isolines";
-import { encodeIndividualOptions, isAborted, withTimeout } from "./utils";
+import { copy, encodeIndividualOptions, isAborted, withTimeout } from "./utils";
 import type {
   ContourTile,
   DecodeImageFunction,
@@ -169,7 +169,10 @@ export class LocalDemManager implements DemManager {
     abortController: AbortController,
     timer?: Timer,
   ): Promise<HeightTile> {
-    const zoom = Math.min(z - (options.overzoom || 0), this.maxzoom);
+    const zoom = Math.max(
+      0,
+      Math.min(z - (options.overzoom || 0), this.maxzoom),
+    );
     const subZ = z - zoom;
     const div = 1 << subZ;
     const newX = Math.floor(x / div);
@@ -210,7 +213,7 @@ export class LocalDemManager implements DemManager {
       return Promise.resolve({ arrayBuffer: new ArrayBuffer(0) });
     }
     const key = [z, x, y, encodeIndividualOptions(options)].join("/");
-    return this.contourCache.get(
+    const cached = this.contourCache.get(
       key,
       async (_, childAbortController) => {
         const max = 1 << z;
@@ -305,5 +308,10 @@ export class LocalDemManager implements DemManager {
       },
       parentAbortController,
     );
+    // maplibre transfers the buffer to its own worker, which would detach the
+    // copy held in the cache, so give each caller its own
+    return cached.then(({ arrayBuffer }) => ({
+      arrayBuffer: copy(arrayBuffer),
+    }));
   }
 }

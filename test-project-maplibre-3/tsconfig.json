@@ -1,5 +1,5 @@
 {
   "extends": "../tsconfig.json",
-  "compilerOptions": { "types": [] },
+  "compilerOptions": { "types": ["geojson"] },
   "include": ["*.ts"]
 }
